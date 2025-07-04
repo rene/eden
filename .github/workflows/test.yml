@@ -49,8 +49,8 @@ jobs:
             echo "runner=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
             echo "runner_virt=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
           else
-            echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-            echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+            echo "runner=['zededa-ubuntu-2204']" >> "$GITHUB_OUTPUT"
+            echo "runner_virt=['zededa-ubuntu-2204']" >> "$GITHUB_OUTPUT"
           fi
 
   smoke:
@@ -64,6 +64,12 @@ jobs:
     needs: determine-runner
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -91,6 +97,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -119,6 +131,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -143,6 +161,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -171,6 +195,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -195,6 +225,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
@@ -219,6 +255,12 @@ jobs:
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner_virt) }}
     steps:
+      - name: Dockerhub Login
+        if: ${{ github.event.repository.full_name }} == 'rene/eve'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PULL_USER }}
+          password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:

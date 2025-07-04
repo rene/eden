@@ -4,7 +4,7 @@ This test runs a [FLEDGE](https://www.lfedge.org/projects/fledge/) project workl
 This workload deploys a FLEDGE demo docker image, connects to
 Flir Thermal Imaging Device(AX8 and other A Series cameras), and getting data.
 
-## Requrements
+## Requirements
 
 Set up the `CAMERA_IP` and `CAMERA_PORT` variables for running test.
 
