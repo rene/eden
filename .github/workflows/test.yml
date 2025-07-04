@@ -73,7 +73,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run Smoke tests
@@ -106,7 +106,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run Networking tests
@@ -140,7 +140,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run Storage tests
@@ -170,7 +170,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run LPS and LOC tests
@@ -204,7 +204,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run EVE upgrade tests
@@ -234,7 +234,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run User apps tests
@@ -264,7 +264,7 @@ jobs:
       - name: Get code
         uses: actions/checkout@v4.1.1
         with:
-          repository: "lf-edge/eden"
+          repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
       - name: Run Virtualization tests
