@@ -45,13 +45,8 @@ jobs:
     steps:
       - id: fork-check
         run: |
-          if [[ "${{ github.event.repository.full_name}}" == "rene/eve" ]] || [[ "${{ github.event.repository.full_name}}" == "rene/eden" ]]; then
-            echo "runner=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
-            echo "runner_virt=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
-          else
-            echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-            echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-          fi
+          echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+          echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
 
   smoke:
     strategy:
