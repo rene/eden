@@ -45,16 +45,23 @@ jobs:
     steps:
       - id: fork-check
         run: |
-          echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-          echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event.repository.full_name}}" == "rene/eve" ]] || [[ "${{ github.event.repository.full_name}}" == "rene/eden" ]]; then
+            echo "runner=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
+            echo "runner_virt=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
+          else
+            echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+            echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+          fi
 
   smoke:
+    env:
+      JOB_NAME: Smoke
+    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
         file_system: ['ext4', 'zfs']
         tpm: [true, false]
-    name: Smoke tests
     needs: determine-runner
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -63,36 +70,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}-${{ matrix.tpm }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }} (${{ matrix.file_system }}, ${{ matrix.tpm }})
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
+          # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+          if [ "$PREV_ATTEMPT" -le 0 ]; then
+            echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          prev_conclusion=$(
+            gh api \
+              -X GET \
+              repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+              -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
+          )
+          if [ -z "$prev_conclusion" ]; then
+            echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+            exit 1
+          fi
+          echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run Smoke tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: ${{ matrix.file_system }}
@@ -106,21 +121,11 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
           aziot_id_scope: ${{ secrets.AZIOT_ID_SCOPE }}
           aziot_connection_string: ${{ secrets.AZIOT_CONNECTION_STRING }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}-${{ matrix.tpm }}
-          path: marker/passed
-
 
   networking:
-    name: Networking test suite
+    env:
+      JOB_NAME: Networking
+    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -129,36 +134,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run Networking tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: "ext4"
@@ -170,24 +183,15 @@ jobs:
           artifact_run_id: ${{ inputs.artifact_run_id }}
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: marker/passed
 
   storage:
+    env:
+      JOB_NAME: Storage
+    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
         file_system: ['ext4', 'zfs']
-    name: Storage test suite
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -196,36 +200,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }} (${{ matrix.file_system }})
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run Storage tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: ${{ matrix.file_system }}
@@ -237,20 +249,11 @@ jobs:
           artifact_run_id: ${{ inputs.artifact_run_id }}
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}
-          path: marker/passed
 
   lps-loc:
-    name: LPS LOC test suite
+    env:
+      JOB_NAME: LPS/LOC
+    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -259,36 +262,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }}
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run LPS and LOC tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: "ext4"
@@ -300,24 +311,15 @@ jobs:
           artifact_run_id: ${{ inputs.artifact_run_id }}
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: marker/passed
 
   eve-upgrade:
+    env:
+      JOB_NAME: EVE Upgrade
+    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
         file_system: ['ext4', 'zfs']
-    name: EVE upgrade test suite
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -326,36 +328,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }} (${{ matrix.file_system }})
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run EVE upgrade tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: ${{ matrix.file_system }}
@@ -367,20 +377,10 @@ jobs:
           artifact_run_id: ${{ inputs.artifact_run_id }}
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}-${{ matrix.file_system }}
-          path: marker/passed
 
   user-apps:
-    name: User apps test suite
+    env:
+      JOB_NAME: User Apps
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -389,36 +389,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }}
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name == \"${{ env.JOB_NAME }}\") | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in previous attempt" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run User apps tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: "ext4"
@@ -430,20 +438,11 @@ jobs:
           artifact_run_id: ${{ inputs.artifact_run_id }}
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: marker/passed
 
   virtualization:
-    name: Virtualization test suite
+    env:
+      JOB_NAME: Virtualization
+    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner_virt) }}
     steps:
@@ -452,36 +451,44 @@ jobs:
           echo "Public IP Address of the runner:"
           curl -s https://api.ipify.org
         shell: bash
-      - name: Download passed-marker artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: ./marker
-        continue-on-error: true
-      - name: Check if already passed
-        id: test_passed
+      - name: Check job status from previous attempt
+        id: prev_attempt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }}
+          PREV_ATTEMPT: ${{ github.run_attempt - 1 }}
         run: |
-          if [[ -f ./marker/passed ]]; then
-            echo "already_passed=true" >> "$GITHUB_OUTPUT"
-            rm -f ./marker/passed
-          else
-            echo "already_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
+            if [ "$PREV_ATTEMPT" -le 0 ]; then
+                echo "conclusion=skipped" >> "$GITHUB_OUTPUT"
+                exit 0
+            fi
+            prev_conclusion=$(
+                gh api \
+                -X GET \
+                repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
+                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+            )
+            if [ -z "$prev_conclusion" ]; then
+                echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
+                exit 1
+            fi
+            echo "conclusion=$prev_conclusion" >> "$GITHUB_OUTPUT"
       - name: Dockerhub Login
-        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.test_passed.outputs.already_passed != 'true' }}
+        if: ${{ github.event.repository.full_name == 'rene/eve' && steps.prev_attempt.outputs.conclusion != 'success' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_PULL_USER }}
           password: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
       - name: Get code
-        if: steps.test_passed.outputs.already_passed != 'true'
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: actions/checkout@v4.1.1
         with:
           repository: "rene/eden"
           ref: ${{ inputs.eden_version }}
           path: "./eden"
-      - name: Run Virtualization tests
-        if: steps.test_passed.outputs.already_passed != 'true'
+      - name: Run tests
+        if: steps.prev_attempt.outputs.conclusion != 'success'
         uses: ./eden/.github/actions/run-eden-test
         with:
           file_system: "ext4"
@@ -494,14 +501,3 @@ jobs:
           require_virtualization: true
           docker_account: ${{ secrets.DOCKERHUB_PULL_USER }}
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
-      - name: Create passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        run: |
-          mkdir -p marker
-          touch marker/passed
-      - name: Upload passed-marker artifact
-        if: ${{ success() && steps.test_passed.outputs.already_passed != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: passed-marker-${{ github.job }}-${{ github.sha }}
-          path: marker/passed
