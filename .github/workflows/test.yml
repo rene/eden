@@ -45,18 +45,13 @@ jobs:
     steps:
       - id: fork-check
         run: |
-          if [[ "${{ github.event.repository.full_name}}" == "rene/eve" ]] || [[ "${{ github.event.repository.full_name}}" == "rene/eden" ]]; then
-            echo "runner=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
-            echo "runner_virt=['buildjet-4vcpu-ubuntu-2204', 'buildjet-pinned-7950x']" >> "$GITHUB_OUTPUT"
-          else
-            echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-            echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
-          fi
+          echo "runner=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
+          echo "runner_virt=['ubuntu-22.04']" >> "$GITHUB_OUTPUT"
 
   smoke:
+    name: Smoke
     env:
       JOB_NAME: Smoke
-    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
@@ -123,9 +118,9 @@ jobs:
           aziot_connection_string: ${{ secrets.AZIOT_CONNECTION_STRING }}
 
   networking:
+    name: Networking
     env:
       JOB_NAME: Networking
-    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -185,9 +180,9 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
 
   storage:
+    name: Storage
     env:
       JOB_NAME: Storage
-    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
@@ -251,9 +246,9 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
 
   lps-loc:
+    name: LPS/LOC
     env:
       JOB_NAME: LPS/LOC
-    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner) }}
     steps:
@@ -313,9 +308,9 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
 
   eve-upgrade:
+    name: EVE Upgrade
     env:
       JOB_NAME: EVE Upgrade
-    name: env.JOB_NAME
     strategy:
       fail-fast: false
       matrix:
@@ -379,6 +374,7 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
 
   user-apps:
+    name: User Apps
     env:
       JOB_NAME: User Apps
     needs: [determine-runner]
@@ -440,9 +436,9 @@ jobs:
           docker_token: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
 
   virtualization:
+    name: Virtualization
     env:
       JOB_NAME: Virtualization
-    name: env.JOB_NAME
     needs: [determine-runner]
     runs-on: ${{ fromJSON(needs.determine-runner.outputs.runner_virt) }}
     steps:
