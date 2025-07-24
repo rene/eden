@@ -145,7 +145,7 @@ jobs:
                 gh api \
                 -X GET \
                 repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
-                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+                -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
             )
             if [ -z "$prev_conclusion" ]; then
                 echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
@@ -273,7 +273,7 @@ jobs:
                 gh api \
                 -X GET \
                 repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
-                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+                -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
             )
             if [ -z "$prev_conclusion" ]; then
                 echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
@@ -401,7 +401,7 @@ jobs:
                 gh api \
                 -X GET \
                 repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
-                -q ".jobs[] | select(.name == \"${{ env.JOB_NAME }}\") | .conclusion"
+                -q ".jobs[] | select(.name | contains(\"${{ env.JOB_NAME }}\")) | .conclusion"
             )
             if [ -z "$prev_conclusion" ]; then
                 echo "Could not find matching job in previous attempt" >&2
@@ -463,7 +463,7 @@ jobs:
                 gh api \
                 -X GET \
                 repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${PREV_ATTEMPT}/jobs \
-                -q ".jobs[] | select(.name == \"${{ env.FULL_JOB_NAME }}\") | .conclusion"
+                -q ".jobs[] | select(.name | contains(\"${{ env.FULL_JOB_NAME }}\")) | .conclusion"
             )
             if [ -z "$prev_conclusion" ]; then
                 echo "Could not find matching job in attempt ${PREV_ATTEMPT}" >&2
