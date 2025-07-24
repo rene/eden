@@ -133,7 +133,7 @@ jobs:
         id: prev_attempt
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          FULL_JOB_NAME: ${{ env.JOB_NAME }}
+          FULL_JOB_NAME: ${{ env.JOB_NAME }}https://github.com/rene/eden/actions/runs/16475936261/job/46577441585?pr=2
         run: |
             PREV_ATTEMPT=$((${{ github.run_attempt }} - 1))
             # For the first attempt, we don't need to check the previous attempt, just set conclusion to 'skipped'
